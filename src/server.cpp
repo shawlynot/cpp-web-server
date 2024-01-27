@@ -1,13 +1,10 @@
 #include <iostream>
-#include <cstdlib>
 #include <string>
+#include <format>
 #include <cstring>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <netdb.h>
-#include <vector>
 #include <sstream>
 
 int main(int argc, char **argv) {
@@ -18,8 +15,8 @@ int main(int argc, char **argv) {
 
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
-   std::cerr << "Failed to create server socket\n";
-   return 1;
+    std::cerr << "Failed to create server socket\n";
+    return 1;
   }
 
   // Since the tester restarts your program quite often, setting REUSE_PORT
@@ -46,7 +43,7 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  struct sockaddr_in client_addr {};
+  struct sockaddr_in client_addr{};
   int client_addr_len = sizeof(client_addr);
 
   std::cout << "Waiting for a client to connect...\n";
@@ -56,25 +53,36 @@ int main(int argc, char **argv) {
 
   std::cout << "Reading from socket" << std::endl;
 
-  const int len {1024};
+  const int len{1024};
   char input_buffer[len];
   long bytes_received = recv(socket_descriptor, input_buffer, len, 0);
   std::cout << bytes_received << std::endl;
 
-  std::string request_str (input_buffer, bytes_received);
+  std::string request_str(input_buffer, bytes_received);
   std::string request_line = request_str.substr(0, request_str.find("\r\n"));
 
-  std::istringstream stream {request_line };
+  std::istringstream stream{request_line};
 
   std::string path;
   stream >> path >> path;
 
   std::cout << "Path: " << path << "\n";
+
+  std::string path_start = "/echo/";
+  std::size_t found = path.find(path_start);
+
   std::string response;
-  if (path == "/") {
-      response = "HTTP/1.1 200 OK\r\n\r\n";
+  if (found != std::string::npos && path.length() > path_start.length()) {
+    std::string to_echo { path.substr(path_start.length(), path.length() - path_start.length()) };
+    response = std::format(
+            "HTTP/1.1 200 OK\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: {}\r\n"
+            "\r\n"
+            "{}",
+            to_echo.length(), to_echo);
   } else {
-      response = "HTTP/1.1 404 Not Found\r\n\r\n";
+    response = "HTTP/1.1 404 Not Found\r\n\r\n";
   }
 
   unsigned long bytes = response.length();
