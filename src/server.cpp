@@ -74,13 +74,9 @@ int main(int argc, char **argv) {
   std::string response;
   if (found != std::string::npos && path.length() > path_start.length()) {
     std::string to_echo { path.substr(path_start.length(), path.length() - path_start.length()) };
-    response = std::format(
-            "HTTP/1.1 200 OK\r\n"
-            "Content-Type: text/plain\r\n"
-            "Content-Length: {}\r\n"
-            "\r\n"
-            "{}",
-            to_echo.length(), to_echo);
+    std::ostringstream response_stream;
+    response_stream << "HTTP/1.1 200 OK\r\n Content-Type: text/plain\r\n Content-Length: " << to_echo.length() <<  "\r\n\r\n" << to_echo;
+    response = response_stream.str();
   } else {
     response = "HTTP/1.1 404 Not Found\r\n\r\n";
   }
