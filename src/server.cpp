@@ -76,8 +76,10 @@ int main(int argc, char **argv) {
     std::ostringstream response_stream;
     response_stream << "HTTP/1.1 200 OK\r\n Content-Type: text/plain\r\n Content-Length: " << to_echo.length() <<  "\r\n\r\n" << to_echo;
     response = response_stream.str();
-  } else {
+  } else if (path == "/") {
     response = "HTTP/1.1 200 OK\r\n\r\n";
+  } else {
+      response = "HTTP/1.1 400 Not Found\r\n\r\n";
   }
 
   unsigned long bytes = response.length();
