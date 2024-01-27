@@ -79,7 +79,7 @@ int main(int argc, char **argv) {
   } else if (path == "/") {
     response = "HTTP/1.1 200 OK\r\n\r\n";
   } else {
-      response = "HTTP/1.1 400 Not Found\r\n\r\n";
+      response = "HTTP/1.1 404 Not Found\r\n\r\n";
   }
 
   unsigned long bytes = response.length();
