@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   if (found != std::string::npos && path.length() > path_start.length()) {
     std::string to_echo { path.substr(path_start.length(), path.length() - path_start.length()) };
     std::ostringstream response_stream;
-    response_stream << "HTTP/1.1 200 OK\r\n Content-Type: text/plain\r\n Content-Length: " << to_echo.length() <<  "\r\n\r\n" << to_echo;
+    response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << to_echo.length() <<  "\r\n\r\n" << to_echo;
     response = response_stream.str();
   } else if (path == "/") {
     response = "HTTP/1.1 200 OK\r\n\r\n";
