@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
     response_stream << "HTTP/1.1 200 OK\r\n Content-Type: text/plain\r\n Content-Length: " << to_echo.length() <<  "\r\n\r\n" << to_echo;
     response = response_stream.str();
   } else {
-    response = "HTTP/1.1 404 Not Found\r\n\r\n";
+    response = "HTTP/1.1 200 OK\r\n\r\n";
   }
 
   unsigned long bytes = response.length();
