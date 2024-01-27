@@ -34,7 +34,7 @@ std::optional<std::string> find_header_value(const std::string &header_name, con
   if (found == request_lines.end()) {
     return std::nullopt;
   }
-  return found->substr(header_name.length());
+  return found->substr(header_name.length() + 2);
 }
 
 
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
                     << "\r\n\r\n" << to_echo;
     response = response_stream.str();
   } else if (path == user_agent_path) {
-    const auto user_agent_header = find_header_value("User-Agent:", request_str);
+    const auto user_agent_header = find_header_value("User-Agent", request_str);
     std::ostringstream response_stream;
     response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << user_agent_header->length()
                     << "\r\n\r\n" << *user_agent_header;
