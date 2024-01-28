@@ -1,6 +1,5 @@
 #include <iostream>
 #include <string>
-#include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
@@ -124,7 +123,7 @@ int main(int argc, char **argv) {
   while (true) {
     int socket_descriptor = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client: " << socket_descriptor << " connected\n";
-    std::thread connection_handler { handle_connection, socket_descriptor };
+    std::thread connection_handler(handle_connection, socket_descriptor);
     connection_handler.detach();
   }
 }
