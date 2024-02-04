@@ -119,7 +119,12 @@ void handle_connection(const int socket_descriptor, const std::string &directory
 int main(int argc, char **argv) {
 
   if (argc != 3) {
-    std::cerr << "Usage: server.sh --directory <directory>" << std::endl;
+    std::cerr << "Usage: server.sh --directory <directory>\n";
+    std::cerr << "Got arguments: ";
+    for (int i = 0; i < argc; ++i) {
+     std::cerr << argv[i];
+    }
+    std::cerr << std::endl;
     return 1;
   }
 
