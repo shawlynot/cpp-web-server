@@ -122,7 +122,7 @@ int main(int argc, char **argv) {
     std::cerr << "Usage: server.sh --directory <directory>\n";
     std::cerr << "Got arguments: ";
     for (int i = 0; i < argc; ++i) {
-     std::cerr << argv[i];
+     std::cerr << " [" << argv[i] << "] ";
     }
     std::cerr << std::endl;
     return 1;
