@@ -88,7 +88,7 @@ void handle_connection(const int socket_descriptor, const std::string &directory
       long content_length { file.tellg() };
 
       std::ostringstream response_stream;
-      response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << content_length
+      response_stream << "HTTP/1.1 200 OK\r\nContent-Length: " << content_length
                       << "\r\n" "Content-Type: application/octet-stream" "\r\n\r\n";
       auto headers = response_stream.str();
       send(socket_descriptor, headers.data(), headers.length(), 0);
