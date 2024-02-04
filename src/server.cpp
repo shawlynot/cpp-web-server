@@ -9,6 +9,13 @@
 #include <algorithm>
 #include <optional>
 #include <thread>
+#include <fstream>
+
+void send_text_response(const int socket_descriptor, const std::string &response) {
+  unsigned long bytes = response.length();
+  std::cout << "Sending response\n";
+  send(socket_descriptor, response.data(), bytes, 0);
+}
 
 std::vector<std::string> split_string(const std::string &request_str, const std::string &separator) {
   std::vector<std::string> out;
@@ -37,7 +44,11 @@ std::optional<std::string> find_header_value(const std::string &header_name, con
   return found->substr(header_name.length() + 2);
 }
 
-void handle_connection(const int socket_descriptor) {
+bool has_path_and_param(const std::string &path, const std::string &path_start) {
+  return path.find(path_start) != std::string::npos && path.length() > path_start.length();
+}
+
+void handle_connection(const int socket_descriptor, const std::string &directory) {
   std::cout << "Client: " << socket_descriptor << " connected\n";
 
   const int len { 1024 };
@@ -55,37 +66,64 @@ void handle_connection(const int socket_descriptor) {
 
   std::cout << "Path: " << path << "\n";
 
-  std::string echo_path_start = "/echo/";
-  std::string user_agent_path = "/user-agent";
+  std::string echo_path { "/echo/" };
+  std::string user_agent_path { "/user-agent" };
+  std::string files_path { "/files/" };
 
-  std::string response;
-  if (path.find(echo_path_start) != std::string::npos && path.length() > echo_path_start.length()) {
-    std::string to_echo { path.substr(echo_path_start.length(), path.length() - echo_path_start.length()) };
+  if (has_path_and_param(path, echo_path)) {
+    std::string to_echo { path.substr(echo_path.length(), path.length() - echo_path.length()) };
     std::ostringstream response_stream;
     response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << to_echo.length()
                     << "\r\n\r\n" << to_echo;
-    response = response_stream.str();
+    send_text_response(socket_descriptor, response_stream.str());
+  } else if (has_path_and_param(path, files_path)) {
+    std::string file_from_path { path.substr(files_path.length(), path.length() - files_path.length()) };
+    const std::string file_to_open = directory + "/" + file_from_path;
+    std::cout << "Opening " << file_to_open << "\n";
+    std::ifstream file { file_to_open, std::ios::binary };
+    if (!file.is_open()) {
+      send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
+    } else {
+      file.seekg(0, std::ios::end);
+      long content_length { file.tellg() };
+
+      std::ostringstream response_stream;
+      response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << content_length
+                      << "\r\n" "Content-Type: application/octet-stream" "\r\n\r\n";
+      auto headers = response_stream.str();
+      send(socket_descriptor, headers.data(), headers.length(), 0);
+
+      file.seekg(0, std::ios::beg);
+      for (char from_file; file.get(from_file);) {
+        send(socket_descriptor, &from_file, 1, 0);
+      }
+      file.close();
+    }
   } else if (path == user_agent_path) {
     const auto user_agent_header = find_header_value("User-Agent", request_str);
     std::ostringstream response_stream;
     response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << user_agent_header->length()
                     << "\r\n\r\n" << *user_agent_header;
-    response = response_stream.str();
+    send_text_response(socket_descriptor, response_stream.str());
   } else if (path == "/") {
-    response = "HTTP/1.1 200 OK\r\n\r\n";
+    send_text_response(socket_descriptor, "HTTP/1.1 200 OK\r\n\r\n");
   } else {
-    response = "HTTP/1.1 404 Not Found\r\n\r\n";
+    send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
   }
-
-  unsigned long bytes = response.length();
-  std::cout << "Sending response\n";
-  send(socket_descriptor, response.data(), bytes, 0);
 
   close(socket_descriptor);
   std::cout << "Connection closed\n";
 }
 
+
 int main(int argc, char **argv) {
+
+  if (argc != 3) {
+    std::cerr << "Usage: server.sh --directory <directory>" << std::endl;
+    return 1;
+  }
+
+  std::string directory { argv[2] };
 
   int server_fd = socket(AF_INET, SOCK_STREAM, 0);
   if (server_fd < 0) {
@@ -123,7 +161,7 @@ int main(int argc, char **argv) {
   while (true) {
     int socket_descriptor = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
     std::cout << "Client: " << socket_descriptor << " connected\n";
-    std::thread connection_handler(handle_connection, socket_descriptor);
+    std::thread connection_handler(handle_connection, socket_descriptor, directory);
     connection_handler.detach();
   }
 }
