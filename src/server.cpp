@@ -45,7 +45,7 @@ std::optional<std::string> find_header_value(const std::string &header_name, con
 }
 
 bool has_path_and_param(const std::string &path, const std::string &path_start) {
-  return path.find(path_start) != std::string::npos && path.length() > path_start.length();
+  return path.rfind(path_start, 0) != std::string::npos && path.length() > path_start.length();
 }
 
 void handle_connection(const int socket_descriptor, const std::string &directory) {
