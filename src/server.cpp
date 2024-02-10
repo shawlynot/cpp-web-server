@@ -5,43 +5,15 @@
 #include <arpa/inet.h>
 #include <sstream>
 #include <array>
-#include <vector>
-#include <algorithm>
 #include <optional>
 #include <thread>
 #include <fstream>
+#include "http/http_request.h"
 
 void send_text_response(const int socket_descriptor, const std::string &response) {
   unsigned long bytes = response.length();
   std::cout << "Sending response\n";
   send(socket_descriptor, response.data(), bytes, 0);
-}
-
-std::vector<std::string> split_string(const std::string &request_str, const std::string &separator) {
-  std::vector<std::string> out;
-  unsigned long start_pos = 0;
-  unsigned long end_pos;
-  for (; start_pos < request_str.length(); start_pos = end_pos + separator.length()) {
-    end_pos = request_str.find(separator, start_pos);
-    if (end_pos == std::string::npos) {
-      end_pos = request_str.length();
-    }
-    out.push_back(request_str.substr(start_pos, end_pos - start_pos));
-  }
-  return out;
-}
-
-std::optional<std::string> find_header_value(const std::string &header_name, const std::string &request_str) {
-  std::vector<std::string> request_lines = split_string(request_str, "\r\n");
-  auto found = std::find_if(
-      request_lines.begin(),
-      request_lines.end(),
-      [&header_name](auto line) { return line.find(header_name) != std::string::npos; }
-  );
-  if (found == request_lines.end()) {
-    return std::nullopt;
-  }
-  return found->substr(header_name.length() + 2);
 }
 
 bool has_path_and_param(const std::string &path, const std::string &path_start) {
@@ -51,66 +23,75 @@ bool has_path_and_param(const std::string &path, const std::string &path_start) 
 void handle_connection(const int socket_descriptor, const std::string &directory) {
   std::cout << "Client: " << socket_descriptor << " connected\n";
 
-  const int len { 1024 };
-  char input_buffer[len];
-  long bytes_received = recv(socket_descriptor, input_buffer, len, 0);
-  std::cout << bytes_received << std::endl;
-
-  std::string request_str(input_buffer, bytes_received);
-  std::string request_line = request_str.substr(0, request_str.find("\r\n"));
-
-  std::istringstream stream { request_line };
-
-  std::string path;
-  stream >> path >> path;
-
-  std::cout << "Path: " << path << "\n";
+  auto request = shawlynot::http_request::receive_from_socket(socket_descriptor);
+  const std::string &path = request.get_path();
 
   std::string echo_path { "/echo/" };
   std::string user_agent_path { "/user-agent" };
   std::string files_path { "/files/" };
 
-  if (has_path_and_param(path, echo_path)) {
-    std::string to_echo { path.substr(echo_path.length(), path.length() - echo_path.length()) };
-    std::ostringstream response_stream;
-    response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << to_echo.length()
-                    << "\r\n\r\n" << to_echo;
-    send_text_response(socket_descriptor, response_stream.str());
-  } else if (has_path_and_param(path, files_path)) {
-    std::string file_from_path { path.substr(files_path.length(), path.length() - files_path.length()) };
-    const std::string file_to_open = directory + "/" + file_from_path;
-    std::cout << "Opening " << file_to_open << "\n";
-    std::ifstream file { file_to_open, std::ios::binary };
-    if (!file.is_open()) {
-      send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
-    } else {
-      file.seekg(0, std::ios::end);
-      long content_length { file.tellg() };
-
+  if (path == "GET") {
+    if (has_path_and_param(path, echo_path)) {
+      std::string to_echo { path.substr(echo_path.length(), path.length() - echo_path.length()) };
       std::ostringstream response_stream;
-      response_stream << "HTTP/1.1 200 OK\r\nContent-Length: " << content_length
-                      << "\r\n" "Content-Type: application/octet-stream" "\r\n\r\n";
-      auto headers = response_stream.str();
-      send(socket_descriptor, headers.data(), headers.length(), 0);
+      response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << to_echo.length()
+                      << "\r\n\r\n" << to_echo;
+      send_text_response(socket_descriptor, response_stream.str());
+    } else if (has_path_and_param(path, files_path)) {
+      std::string file_from_path { path.substr(files_path.length(), path.length() - files_path.length()) };
+      const std::string file_to_open = directory + "/" + file_from_path;
+      std::cout << "Opening " << file_to_open << "\n";
+      std::ifstream file { file_to_open, std::ios::binary };
+      if (!file.is_open()) {
+        send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
+      } else {
+        file.seekg(0, std::ios::end);
+        long content_length { file.tellg() };
 
-      file.seekg(0, std::ios::beg);
-      for (char from_file; file.get(from_file);) {
-        send(socket_descriptor, &from_file, 1, 0);
+        std::ostringstream response_stream;
+        response_stream << "HTTP/1.1 200 OK\r\nContent-Length: " << content_length
+                        << "\r\n" "Content-Type: application/octet-stream" "\r\n\r\n";
+        auto headers = response_stream.str();
+        send(socket_descriptor, headers.data(), headers.length(), 0);
+
+        file.seekg(0, std::ios::beg);
+        for (char from_file; file.get(from_file);) {
+          send(socket_descriptor, &from_file, 1, 0);
+        }
+        file.close();
       }
-      file.close();
+    } else if (path == user_agent_path) {
+      const auto user_agent_header = request.get_headers().at("User-Agent");
+      std::ostringstream response_stream;
+      response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << user_agent_header.length()
+                      << "\r\n\r\n" << user_agent_header;
+      send_text_response(socket_descriptor, response_stream.str());
+    } else if (path == "/") {
+      send_text_response(socket_descriptor, "HTTP/1.1 200 OK\r\n\r\n");
+    } else {
+      send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
     }
-  } else if (path == user_agent_path) {
-    const auto user_agent_header = find_header_value("User-Agent", request_str);
-    std::ostringstream response_stream;
-    response_stream << "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " << user_agent_header->length()
-                    << "\r\n\r\n" << *user_agent_header;
-    send_text_response(socket_descriptor, response_stream.str());
-  } else if (path == "/") {
-    send_text_response(socket_descriptor, "HTTP/1.1 200 OK\r\n\r\n");
-  } else {
-    send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
+  } else if (path == "POST") {
+    if (has_path_and_param(path, files_path)) {
+      std::string file_from_path { path.substr(files_path.length(), path.length() - files_path.length()) };
+      const std::string file_to_save = directory + "/" + file_from_path;
+      std::cout << "Opening " << file_to_save << "\n";
+      std::ofstream file { file_to_save, std::ios::binary };
+      if (!file.is_open()) {
+        send_text_response(socket_descriptor, "HTTP/1.1 400 Bad Request\r\n\r\n");
+      } else {
+        auto body = request.get_body();
+        file.write(body.data(), body.size());
+        send_text_response(socket_descriptor,
+                           "HTTP/1.1 201 Created\r\n"
+                           "Content-Length: " + std::to_string(body.size()) + "\r\n"
+                           "\r\n"
+                           );
+      }
+    } else {
+      send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
+    }
   }
-
   close(socket_descriptor);
   std::cout << "Connection closed\n";
 }
