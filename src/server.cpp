@@ -25,12 +25,13 @@ void handle_connection(const int socket_descriptor, const std::string &directory
 
   auto request = shawlynot::http_request::receive_from_socket(socket_descriptor);
   const std::string &path = request.get_path();
+  const std::string &method = request.get_method();
 
   std::string echo_path { "/echo/" };
   std::string user_agent_path { "/user-agent" };
   std::string files_path { "/files/" };
 
-  if (path == "GET") {
+  if (method == "GET") {
     if (has_path_and_param(path, echo_path)) {
       std::string to_echo { path.substr(echo_path.length(), path.length() - echo_path.length()) };
       std::ostringstream response_stream;
@@ -71,7 +72,7 @@ void handle_connection(const int socket_descriptor, const std::string &directory
     } else {
       send_text_response(socket_descriptor, "HTTP/1.1 404 Not Found\r\n\r\n");
     }
-  } else if (path == "POST") {
+  } else if (method == "POST") {
     if (has_path_and_param(path, files_path)) {
       std::string file_from_path { path.substr(files_path.length(), path.length() - files_path.length()) };
       const std::string file_to_save = directory + "/" + file_from_path;
@@ -81,10 +82,14 @@ void handle_connection(const int socket_descriptor, const std::string &directory
         send_text_response(socket_descriptor, "HTTP/1.1 400 Bad Request\r\n\r\n");
       } else {
         auto body = request.get_body();
-        file.write(body.data(), body.size());
+        if (!file.write(body.data(), body.size())){
+          file.close();
+          send_text_response(socket_descriptor, "HTTP/1.1 500 Server Error\r\n\r\n");
+        }
+        file.close();
         send_text_response(socket_descriptor,
                            "HTTP/1.1 201 Created\r\n"
-                           "Content-Length: " + std::to_string(body.size()) + "\r\n"
+                           "Content-Length: 0\r\n"
                            "\r\n"
                            );
       }

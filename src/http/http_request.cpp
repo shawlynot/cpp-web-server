@@ -13,7 +13,7 @@
 
 namespace shawlynot {
 
-  const long http_request::max_buffer_size = 1024;
+  const long http_request::body_buffer_chunk_size = 1024;
   const std::regex header_regex { "([^:]+):\\s+(.*)" };
 
   const std::string &http_request::get_method() const {
@@ -28,35 +28,29 @@ namespace shawlynot {
     return path;
   }
 
-
   std::vector<char> http_request::get_body() {
     std::vector<char> body;
-    std::vector<char> input_buffer {};
-    input_buffer.reserve(4);
+    std::vector<char> input_buffer (body_buffer_chunk_size);
     long bytes_received;
-    long total_bytes_received { 0 };
     do {
-      bytes_received = recv(http_request::socket, input_buffer.data(), max_buffer_size, 0);
+      bytes_received = recv(http_request::socket, input_buffer.data(), body_buffer_chunk_size, 0);
       if (bytes_received == -1) {
         std::cerr << "Error reading from socket " << http_request::socket << "\n";
         end_of_stream = true;
         return {};
       }
-      total_bytes_received += bytes_received;
-      body.reserve(total_bytes_received);
       for (int i = 0; i < bytes_received; i++) {
         body.push_back(input_buffer[i]);
       }
-    } while (bytes_received > 0);
+    } while (bytes_received < body_buffer_chunk_size);
     end_of_stream = true;
     return body;
   }
 
-
   http_request http_request::receive_from_socket(int socket) {
     //seek through stream until we find a \r\n\r\n
     std::vector<char> path_and_headers;
-    path_and_headers.reserve(4);
+    path_and_headers.resize(4);
     bool found { false };
     long init_bytes_received = recv(socket, path_and_headers.data(), 4, 0);
     if (init_bytes_received < 4) {
@@ -84,7 +78,7 @@ namespace shawlynot {
 
     //process path and header block
     std::string path_and_headers_str { path_and_headers.data(), path_and_headers.size() };
-    auto request_lines { shawlynot::split_string(path_and_headers_str, "/r/n") };
+    auto request_lines { shawlynot::split_string(path_and_headers_str, "\r\n") };
     if (request_lines.empty()) {
       std::cerr << "Malformed request\n";
       throw std::runtime_error("Error");
@@ -94,7 +88,7 @@ namespace shawlynot {
     stream >> method >> path;
 
     std::map<std::string, std::string> headers;
-    for (auto ptr = request_lines.begin() + 1; ptr == request_lines.end(); ++ptr) {
+    for (auto ptr = request_lines.begin() + 1; ptr != request_lines.end(); ++ptr) {
       auto header_line { *ptr };
       std::smatch matches;
       if (std::regex_search(header_line, matches, header_regex)) {
