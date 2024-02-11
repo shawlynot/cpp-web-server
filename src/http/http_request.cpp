@@ -13,7 +13,6 @@
 
 namespace shawlynot {
 
-  const long http_request::body_buffer_chunk_size = 1024;
   const std::regex header_regex { "([^:]+):\\s+(.*)" };
 
   const std::string &http_request::get_method() const {
@@ -29,20 +28,14 @@ namespace shawlynot {
   }
 
   std::vector<char> http_request::get_body() {
-    std::vector<char> body;
-    std::vector<char> input_buffer (body_buffer_chunk_size);
+    std::vector<char> body (content_length);
     long bytes_received;
-    do {
-      bytes_received = recv(http_request::socket, input_buffer.data(), body_buffer_chunk_size, 0);
-      if (bytes_received == -1) {
-        std::cerr << "Error reading from socket " << http_request::socket << "\n";
-        end_of_stream = true;
-        return {};
-      }
-      for (int i = 0; i < bytes_received; i++) {
-        body.push_back(input_buffer[i]);
-      }
-    } while (bytes_received < body_buffer_chunk_size);
+    bytes_received = recv(http_request::socket, body.data(), content_length, 0);
+    if (bytes_received == -1) {
+      std::cerr << "Error reading from socket " << http_request::socket << "\n";
+      end_of_stream = true;
+      return {};
+    }
     end_of_stream = true;
     return body;
   }
@@ -97,7 +90,14 @@ namespace shawlynot {
       }
     }
 
-    return http_request { method, path, headers, socket };
+    //read content length header
+    auto maybe_content_length = headers.find("Content-Length");
+    unsigned long content_length = 0;
+    if (maybe_content_length != headers.end()) {
+      auto [_, content_length_str] = *maybe_content_length;
+      content_length = std::stol(content_length_str);
+    }
+    return http_request { method, path, headers, socket, content_length };
   }
 
   bool http_request::is_end_of_stream() const {
@@ -105,10 +105,10 @@ namespace shawlynot {
   }
 
   http_request::http_request(std::string method, std::string path, const std::map<std::string, std::string> &headers,
-                             int socket)
+                             int socket, unsigned long contentLength)
       : method(std::move(method)),
         path(std::move(path)),
-        headers(headers), socket(socket) {
+        headers(headers), socket(socket), content_length(contentLength) {
 
   }
 

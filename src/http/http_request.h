@@ -15,11 +15,11 @@ namespace shawlynot {
     std::string method;
     std::string path;
     std::map<std::string, std::string> headers;
+    unsigned long content_length;
     int socket;
     bool end_of_stream;
-    const static long body_buffer_chunk_size;
     http_request(std::string method, std::string path, const std::map<std::string, std::string> &headers,
-                 int socket);
+                 int socket, unsigned long contentLength);
 
   public:
 
